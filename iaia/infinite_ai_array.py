@@ -1,24 +1,32 @@
 """Main module."""
-from collections.abc import MutableSequence
+from collections.abc import MutableSequence, MutableMapping
 import openai
-import inspect
 import re
-import readline
-import dis
+from .inspectcontext import get_frame_source
+from .coercion import is_num, as_num
+import time
 
 
 class InfiniteAIArray(MutableSequence):
     def __init__(
-        self, _iterable=None, *, gpt_key=None, gpt_engine="text-davinci-003", uplevel=0
+        self,
+        _iterable=None,
+        *,
+        gpt_key=None,
+        gpt_engine="text-davinci-003",
+        uplevel=0,
+        rate_limit=5,
     ):
         self._list = list(_iterable or [])
         self._waiting_items = []
         self.gpt_key = gpt_key
         self.gpt_engine = gpt_engine
         self.max_gpt_context = 10
+        self.rate_limit = rate_limit
+        self._last_times = []
         self._max_easy_grow = 10
         self._max_tries = 3
-        self._prompt_context = self._get_frame_source(uplevel)
+        self._prompt_context = get_frame_source(uplevel + 1)
         self._type = None
         if self._list:
             self._guess_type(self._list)
@@ -28,7 +36,7 @@ class InfiniteAIArray(MutableSequence):
             return
         isnum = True
         for item in list:
-            if not self._is_num(item):
+            if not is_num(item):
                 isnum = False
                 break
         if isnum:
@@ -36,29 +44,9 @@ class InfiniteAIArray(MutableSequence):
         else:
             self._type = "str"
 
-    _is_num_re = re.compile(r"^\s*[+-]?\d+(\.\d+)?\s*$")
-
-    def _is_num(self, s):
-        return isinstance(s, (int, float)) or (
-            isinstance(s, str) and self._is_num_re.match(s)
-        )
-
-    def _as_num(self, s):
-        if not isinstance(s, str):
-            return s
-        if "." in s:
-            try:
-                return float(s)
-            except ValueError:
-                return s
-        try:
-            return int(s)
-        except ValueError:
-            return s
-
     def _coerce_type(self, s):
         if self._type == "number":
-            return self._as_num(s)
+            return as_num(s)
         return s
 
     def __getitem__(self, index):
@@ -89,45 +77,9 @@ class InfiniteAIArray(MutableSequence):
     def __len__(self):
         return len(self._list)
 
-    def _get_frame_source(self, uplevel=0):
-        frame = inspect.currentframe()
-        for i in range(uplevel + 2):
-            frame = frame.f_back
-        print(
-            dir(frame),
-            frame.f_lasti,
-            frame.f_code,
-        )
-        print(dis.code_info(frame.f_code))
-        names = []
-        for index, inst in enumerate(dis.get_instructions(frame.f_code)):
-            if inst.offset > frame.f_lasti and inst.starts_line:
-                break
-            if inst.starts_line:
-                names = []
-            if inst.opname.startswith("STORE"):
-                names.append(inst.argval)
-            print(index, frame.f_lasti, inst)
-        print(names)
-        try:
-            source = inspect.getsource(frame.f_code)
-        except OSError:
-            # This might happen when used interactively, try to get history...
-            source = self._get_recent_history()
-        if not source:
-            source = "[" + ", ".join(names) + "]"
-        else:
-            source = source.strip() + "# " + ", ".join(names)
-        return source
-
-    def _get_recent_history(self):
-        length = readline.get_current_history_length()
-        if length:
-            return readline.get_history_item(length)
-        return ""
-
     def _get_next_item(self, upto):
         tries = self._max_tries
+        self._last_times = [t for t in self._last_times if t > time.time() - 1]
         while True:
             needed = upto - len(self._list) + 1
             print("checking", len(self._list), upto, needed, len(self._waiting_items))
@@ -137,6 +89,8 @@ class InfiniteAIArray(MutableSequence):
                 return
             if tries <= 0:
                 raise IndexError("No more items available")
+            if len(self._last_times) >= self.rate_limit:
+                raise IndexError("Rate limit exceeded")
             nums = []
             last_num = 0
             for i, item in enumerate(self._list[(-self.max_gpt_context) :]):
@@ -158,13 +112,14 @@ class InfiniteAIArray(MutableSequence):
                 # frequency_penalty=0,
                 # presence_penalty=0,
             )
+            self._last_times.append(time.time())
             text = response.choices[0].text
             print("response:", response, text)
             result = []
             for items in [self._fix_line(line) for line in text.splitlines()]:
                 result.extend(items)
             print("result:", result)
-            ## The last item was cut off:
+            # The last item was cut off:
             if response.choices[0].finish_reason == "length" and result:
                 result.pop()
             if self._type is None:
@@ -182,3 +137,101 @@ class InfiniteAIArray(MutableSequence):
         if not text:
             return []
         return [text]
+
+
+class InfiniteAIDict(MutableMapping):
+    def __init__(
+        self,
+        _iterable=None,
+        *,
+        gpt_key=None,
+        gpt_engine="text-davinci-003",
+        uplevel=0,
+        ratelimit=5,
+    ):
+        self._dict = dict(_iterable or ())
+        self.gpt_key = gpt_key
+        self.gpt_engine = gpt_engine
+        self.rate_limit = ratelimit
+        self.max_gpt_context = 10
+        self._last_times = []
+        print("what up?", uplevel)
+        self._prompt_context = get_frame_source(uplevel + 1)
+        self._type = None
+        if self._dict:
+            self._guess_type(self._dict)
+
+    def _guess_type(self, d):
+        if not d:
+            return
+        isnum = True
+        for value in d.values():
+            if not is_num(value):
+                isnum = False
+                break
+        if isnum:
+            self._type = "number"
+        else:
+            self._type = "str"
+
+    def _coerce_type(self, s):
+        if self._type == "number":
+            return as_num(s)
+        return s
+
+    def __getitem__(self, key):
+        if key in self._dict:
+            return self._dict[key]
+        else:
+            self._get_next_item(key)
+            return self._dict[key]
+
+    def __setitem__(self, key, value):
+        self._dict[key] = value
+
+    def __delitem__(self, key):
+        del self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def _get_next_item(self, asking_key):
+        self._last_times = [t for t in self._last_times if t > time.time() - 1]
+        if len(self._last_times) >= self.rate_limit:
+            raise IndexError("Rate limit exceeded")
+        items = []
+        last_num = 0
+        for i, key in enumerate(list(self._dict.keys())[-self.max_gpt_context :]):
+            items.append(f"{i + 1}. {key}: {self._dict[key]}")
+            last_num = i
+        items = "\n".join(items)
+        prompt = f"""A list of name: value pairs, created with the code `{self._prompt_context}`:
+
+{items}
+{last_num + 1}. {asking_key}:
+""".strip()
+        print("prompt:", prompt)
+        response = openai.Completion.create(
+            engine=self.gpt_engine,
+            prompt=prompt,
+            temperature=0.5,
+            max_tokens=24,
+            stop=["\n"],
+            # top_p=1,
+            # frequency_penalty=0,
+            # presence_penalty=0,
+        )
+        self._last_times.append(time.time())
+        text = response.choices[0].text
+        print("response:", response, text)
+        # FIXME: should consider what to do if the last item was cut off
+        if self._type is None:
+            self._guess_type({asking_key: text})
+        self._dict[asking_key] = self._coerce_type(text)
+
+    def __repr__(self):
+        source = repr(self._dict)
+        return source[:-1] + ", ...}"
