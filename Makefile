@@ -48,9 +48,9 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr .pytest_cache
 
 lint/flake8: ## check style with flake8
-	flake8 infinite_ai_array tests
+	flake8 iaia tests
 lint/black: ## check style with black
-	black --check infinite_ai_array tests
+	black --check iaia tests
 
 lint: lint/flake8 lint/black ## check style
 
@@ -61,7 +61,7 @@ test-all: ## run tests on every Python version with tox
 	tox
 
 coverage: ## check code coverage quickly with the default Python
-	coverage run --source infinite_ai_array -m pytest
+	coverage run --source iaia -m pytest
 	coverage report -m
 	coverage html
 	$(BROWSER) htmlcov/index.html

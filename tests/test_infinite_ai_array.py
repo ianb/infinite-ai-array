@@ -5,7 +5,7 @@
 import pytest
 
 
-from infinite_ai_array import infinite_ai_array
+from iaia import InfiniteAIArray
 
 
 @pytest.fixture
