@@ -3,6 +3,7 @@ from .findimports import find_imports
 import subprocess
 from .gptclient import gpt_client
 import re
+import traceback
 
 package_names_for_module = {
     "bs4": "beautifulsoup4",
@@ -13,6 +14,9 @@ package_names_for_module = {
 class MagicModule:
     def __init__(self, gpt_engine="text-davinci-003"):
         self.gpt_engine = gpt_engine
+        # FIXME: all code appears to be in <string> and can't
+        # be shown in tracebacks. Setting __file__ here doesn't
+        # help, but sure what the answer is
         self.ns = {}
         self.existing = {}
 
@@ -53,6 +57,13 @@ class MagicFunction:
         key = self.call_key(*args, **kw)
         if key not in self.funcs:
             self.make_function(*args, **kw)
+        exc = None
+        try:
+            return self.funcs[key](*args, **kw)
+        except Exception as e:
+            exc = e
+        print(f"Attempting to fix exception {exc}...")
+        self.fix_function(exc, *args, **kw)
         return self.funcs[key](*args, **kw)
 
     def call_key(self, *args, **kw):
@@ -89,6 +100,9 @@ Create a function named `{self.name}`:
         key = self.call_key(*args, **kw)
         prompt, signature = self.make_prompt(*args, **kw)
         source = self.get_completion(prompt, signature)
+        self.compile_function(key, source)
+
+    def compile_function(self, key, source):
         self.imports[key] = find_imports(source)
         missing = []
         for name in self.imports[key]:
@@ -114,4 +128,38 @@ Create a function named `{self.name}`:
                 )
         self.sources[key] = source
         exec(source, self.module.ns)
+        func = self.module.ns[self.name]
+        # FIXME: this does set the filename, but the text isn't there so
+        # it doesn't let the code show up in tracebacks:
+        func.__code__ = func.__code__.replace(co_filename="magic.py")
         self.funcs[key] = self.module.ns[self.name]
+
+    def fix_function(self, exc, *args, **kw):
+        key = self.call_key(*args, **kw)
+        source = self.sources[key]
+        tb = traceback.extract_tb(exc.__traceback__)
+        line = "?"
+        for frame in tb:
+            if frame.filename == "<string>":
+                line = source.splitlines()[frame.lineno - 1]
+                break
+        prompt = f"""\
+The following function throws an exception {exc.__class__.__name__}: {exc}
+At the line `{line.strip()}`
+
+```
+{source}
+```
+
+The same function but with the {exc.__class__.__name__} exception fixed:
+
+```"""
+        response = gpt_client.create_completion(
+            engine=self.module.gpt_engine,
+            prompt=prompt,
+            max_tokens=1000,
+            temperature=0.1,
+            stop=["```"],
+        )
+        source = response.choices[0].text
+        self.compile_function(key, source)
