@@ -1,37 +1,17 @@
-=================
-Infinite AI Array
-=================
-
-.. toc::
-
-.. comment:
-        .. image:: https://img.shields.io/pypi/v/infinite_ai_array.svg
-                :target: https://pypi.python.org/pypi/infinite_ai_array
-
-        .. image:: https://readthedocs.org/projects/infinite-ai-array/badge/?version=latest
-                :target: https://infinite-ai-array.readthedocs.io/en/latest/?version=latest
-                :alt: Documentation Status
-
-
-        .. image:: https://pyup.io/repos/github/ianb/infinite_ai_array/shield.svg
-        :target: https://pyup.io/repos/github/ianb/infinite_ai_array/
-        :alt: Updates
-
+# Infinite AI Array
 
 Do you worry that you'll get to the end of a good list and have nothing more, leaving you sad and starved of data! Worry no more!
 
-How are *YOU* helping to bring AI into your runtimes?
------------------------------------------------------
+## How are _YOU_ helping to bring AI into your runtimes?
 
 I hear this all the time:
 
-* Why are my programs so deterministic? How can I make them more exciting and fresh?
-* My lists are small and boring. How can I make them bigger and more interesting?
-* My functions were written by humans. Even copying and pasting without thinking is too much work. How can I make them more dangerously unpredictable?
-* When I write dictionaries I keep getting `KeyError`. I don't want my computer to tell me what doesn't work, I want to hear answers not problems!
+-   Why are my programs so deterministic? How can I make them more exciting and fresh?
+-   My lists are small and boring. How can I make them bigger and more interesting?
+-   My functions were written by humans. Even copying and pasting without thinking is too much work. How can I make them more dangerously unpredictable?
+-   When I write dictionaries I keep getting `KeyError`. I don't want my computer to tell me what doesn't work, I want to hear answers not problems!
 
-Why this is a solution to your made-up problems
------------------------------------------------
+## Why this is a solution to your made-up problems
 
 ```python
 >>> from iaia import InfiniteAIArray, InfiniteAIDict
@@ -62,8 +42,7 @@ Also dictionaries...
 5. Seoul, South Korea   9.793 million
 ```
 
-Strings are cool, but how can I be more daring?
------------------------------------------------
+## Strings are cool, but how can I be more daring?
 
 ```python
 >>> import iaia.magic
@@ -97,7 +76,7 @@ def first_primes(arg1: int):
     return prime_list
 ```
 
-Ah, it thought I wanted the primes *up to* 5, not 5 primes. Let's be clearer:
+Ah, it thought I wanted the primes _up to_ 5, not 5 primes. Let's be clearer:
 
 ```python
 >>> iaia.magic.first_primes(count=5)
@@ -111,12 +90,11 @@ Exciting stuff...
 '#REDIRECT [[Apple]]\n\n{{Redirect category shell|1=\n{{R from plural}}\n}}'
 >>> iaia.magic.fetch_wikipedia_source("Apple")
 ... page source ...
-````
+```
 
 At least that's what it'll (probably) do if you have the `requests` library installed. (If you don't it will ask if you want to install it.)
 
-"Nothing in life is free" is false, but for this it is true
------------------------------------------------------------
+## "Nothing in life is free" is false, but for this it is true
 
 All those calls were actually backed by [GPT-3](https://en.wikipedia.org/wiki/GPT-3). GPT-3 costs money. To use it you must [sign up for the API](https://openai.com/api/) and [create an API key](https://beta.openai.com/account/api-keys). Then you can use it like this:
 
@@ -133,8 +111,7 @@ Or while in Python:
 
 Note that any requests will go in `iaia-cache/` and be cached forever.
 
-Seeing what's going on
-----------------------
+## Seeing what's going on
 
 You'll probably like to see what's going on. To do this either:
 
@@ -174,6 +151,6 @@ Tokens used: 34+24  total: 58 + cached: 0 = 58 ($0.0012 w/o cache $0.0012)
 ['The Catcher in the Rye by J.D. Salinger', 'To Kill a Mockingbird by Harper Lee', '1984 by George Orwell']
 ```
 
-`InfiniteAIArray`` and `InfiniteAIDict` both look at the call context to understand the purpose of the list, as well as using the contents of the data structure.
+` InfiniteAIArray`` and  `InfiniteAIDict` both look at the call context to understand the purpose of the list, as well as using the contents of the data structure.
 
-`iaia.magic` does *not* use the call context, but it does use the function name, argument types, and keyword names.
+`iaia.magic` does _not_ use the call context, but it does use the function name, argument types, and keyword names.
