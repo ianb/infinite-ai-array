@@ -151,6 +151,6 @@ Tokens used: 34+24  total: 58 + cached: 0 = 58 ($0.0012 w/o cache $0.0012)
 ['The Catcher in the Rye by J.D. Salinger', 'To Kill a Mockingbird by Harper Lee', '1984 by George Orwell']
 ```
 
-` InfiniteAIArray`` and  `InfiniteAIDict` both look at the call context to understand the purpose of the list, as well as using the contents of the data structure.
+`InfiniteAIArray` and `InfiniteAIDict` both look at the call context to understand the purpose of the list, as well as using the contents of the data structure.
 
 `iaia.magic` does _not_ use the call context, but it does use the function name, argument types, and keyword names.
