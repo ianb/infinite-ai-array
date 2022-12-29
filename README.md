@@ -14,7 +14,7 @@ I hear this all the time:
 ## Why this is a solution to your made-up problems
 
 ```python
->>> from iaia import InfiniteAIArray, InfiniteAIDict
+>>> from iaia import InfiniteAIArray
 >>> coolest_cities_ranked = InfiniteAIArray()
 >>> print(coolest_cities_ranked[:5])
 ['Tokyo, Japan', 'London, England', 'San Francisco, USA', 'Sydney, Australia', 'Barcelona, Spain']
