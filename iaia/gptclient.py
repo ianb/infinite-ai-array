@@ -107,9 +107,9 @@ class GptClient:
         title = request[0][:15]
         title = self.title_illegal_re.sub("_", title)
         serialized = pickle.dumps(str(request))
-        h = hashlib.sha1(serialized).hexdigest().encode("utf-8")
+        h = hashlib.sha1(serialized).hexdigest()
         filename = f"{title}-{h}.pickle"
-        return self.cache_dir / f"{filename}.pickle"
+        return self.cache_dir / f"{filename}"
 
     def print_request(self, request, cached=False):
         # print("=" * 60)
@@ -122,7 +122,7 @@ class GptClient:
             parts.append(f"temperature={request.temperature}")
         print(f"Request {self._count}: {' '.join(parts)}")
         print(request.prompt)
-        print("-" * 60)
+        print("-" * 60, "Response")
 
     def print_response(self, response, response_time):
         print(response.choices[0]["text"])

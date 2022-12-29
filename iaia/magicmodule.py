@@ -2,6 +2,7 @@ import sys
 from .findimports import find_imports
 import subprocess
 from .gptclient import gpt_client
+import re
 
 package_names_for_module = {
     "bs4": "beautifulsoup4",
@@ -25,21 +26,44 @@ class MagicFunction:
     def __init__(self, module, name):
         self.module = module
         self.name = name
-        self.source = None
-        self.func = None
-        self.imports = None
+        self.sources = {}
+        self.funcs = {}
+        self.imports = {}
+
+    def __str__(self):
+        if not self.sources:
+            return "# Unevaluated magic function"
+        if (len(self.sources)) == 1:
+            return self.sources[list(self.sources.keys())[0]]
+        parts = ["# Magic function with multiple signatures:", *self.sources.values()]
+        return "\n".join(parts)
+
+    def __repr__(self):
+        sigs = []
+        for source in self.sources.values():
+            params = "..."
+            match = re.findall(r"def \w+\((.*)\):", source)
+            if match:
+                params = match[0]
+            sigs.append(f"({params})")
+        sigs = " or ".join(sigs)
+        return f"<iaia.maigic.{self.name}{sigs}>"
 
     def __call__(self, *args, **kw):
-        if self.func is None:
+        key = self.call_key(*args, **kw)
+        if key not in self.funcs:
             self.make_function(*args, **kw)
-        return self.func(*args, **kw)
+        return self.funcs[key](*args, **kw)
+
+    def call_key(self, *args, **kw):
+        return tuple([len(args), *sorted(kw.keys())])
 
     def make_prompt(self, *args, **kw):
         sig = []
         for i, arg in enumerate(args):
             sig.append(f"arg{i + 1}: {type(arg).__name__}")
         if kw:
-            sig.append("*, ")
+            sig.append("*")
         for name, arg in kw.items():
             sig.append(f"{name}: {type(arg).__name__}")
         signature = f"{self.name}({', '.join(sig)})"
@@ -52,7 +76,7 @@ Create a function named `{self.name}`:
         return prompt, source
 
     def get_completion(self, prompt, signature):
-        response = gpt_client.completion_create(
+        response = gpt_client.create_completion(
             engine=self.module.gpt_engine,
             prompt=prompt,
             max_tokens=1000,
@@ -62,11 +86,12 @@ Create a function named `{self.name}`:
         return signature + "\n" + response.choices[0].text
 
     def make_function(self, *args, **kw):
+        key = self.call_key(*args, **kw)
         prompt, signature = self.make_prompt(*args, **kw)
         source = self.get_completion(prompt, signature)
-        self.imports = find_imports(source)
+        self.imports[key] = find_imports(source)
         missing = []
-        for name in self.imports:
+        for name in self.imports[key]:
             try:
                 __import__(name)
             except ImportError:
@@ -87,6 +112,6 @@ Create a function named `{self.name}`:
                         *to_install,
                     ]
                 )
-        self.source = source
+        self.sources[key] = source
         exec(source, self.module.ns)
-        self.func = self.module.ns[self.name]
+        self.funcs[key] = self.module.ns[self.name]

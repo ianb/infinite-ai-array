@@ -226,6 +226,7 @@ class InfiniteAIDict(MutableMapping):
         )
         text = response.choices[0].text
         # FIXME: should consider what to do if the last item was cut off
+        text = text.strip()
         if self._type is None:
             self._guess_type({asking_key: text})
         self._dict[asking_key] = self._coerce_type(text)
