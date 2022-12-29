@@ -1,10 +1,9 @@
 """Main module."""
 from collections.abc import MutableSequence, MutableMapping
-import openai
 import re
 from .inspectcontext import get_frame_source
 from .coercion import is_num, as_num
-import time
+from .gptclient import gpt_client
 
 
 class InfiniteAIArray(MutableSequence):
@@ -15,18 +14,15 @@ class InfiniteAIArray(MutableSequence):
         gpt_key=None,
         gpt_engine="text-davinci-003",
         uplevel=0,
-        rate_limit=5,
     ):
         self._list = list(_iterable or [])
         self._waiting_items = []
         self.gpt_key = gpt_key
         self.gpt_engine = gpt_engine
         self.max_gpt_context = 10
-        self.rate_limit = rate_limit
-        self._last_times = []
         self._max_easy_grow = 10
-        self._max_tries = 3
-        self._prompt_context = get_frame_source(uplevel + 1)
+        self._max_tries = 6
+        self._prompt_context = get_frame_source(uplevel + 1, [self.__class__.__name__])
         self._type = None
         if self._list:
             self._guess_type(self._list)
@@ -71,6 +67,9 @@ class InfiniteAIArray(MutableSequence):
         source = repr(self._list)
         return source[:-1] + ", ...]"
 
+    def __iter__(self):
+        return ArrayIterator(self, self._max_easy_grow)
+
     def insert(self, index, value):
         self._list.insert(index, value)
 
@@ -79,31 +78,29 @@ class InfiniteAIArray(MutableSequence):
 
     def _get_next_item(self, upto):
         tries = self._max_tries
-        self._last_times = [t for t in self._last_times if t > time.time() - 1]
         while True:
             needed = upto - len(self._list) + 1
-            print("checking", len(self._list), upto, needed, len(self._waiting_items))
             if needed <= len(self._waiting_items):
                 self._list.extend(self._waiting_items[:needed])
                 del self._waiting_items[:needed]
                 return
+            self._list.extend(self._waiting_items)
+            needed -= len(self._waiting_items)
+            self._waiting_items = []
             if tries <= 0:
                 raise IndexError("No more items available")
-            if len(self._last_times) >= self.rate_limit:
-                raise IndexError("Rate limit exceeded")
             nums = []
             last_num = 0
             for i, item in enumerate(self._list[(-self.max_gpt_context) :]):
                 nums.append(f"{i + 1}. {item}")
                 last_num = i
             nums = "\n".join(nums)
-            prompt = f"""A list of {last_num + needed} items, created with the code `{self._prompt_context}`:
+            prompt = f"""A list of {last_num + needed + 1} items, created with the code `{self._prompt_context}`:
 
 {nums}
-{last_num + 1}.
+{last_num + 2}.
     """.strip()
-            print("prompt:", prompt)
-            response = openai.Completion.create(
+            response = gpt_client.create_completion(
                 engine=self.gpt_engine,
                 prompt=prompt,
                 temperature=0.5,
@@ -112,13 +109,10 @@ class InfiniteAIArray(MutableSequence):
                 # frequency_penalty=0,
                 # presence_penalty=0,
             )
-            self._last_times.append(time.time())
             text = response.choices[0].text
-            print("response:", response, text)
             result = []
             for items in [self._fix_line(line) for line in text.splitlines()]:
                 result.extend(items)
-            print("result:", result)
             # The last item was cut off:
             if response.choices[0].finish_reason == "length" and result:
                 result.pop()
@@ -139,23 +133,33 @@ class InfiniteAIArray(MutableSequence):
         return [text]
 
 
+class ArrayIterator:
+    def __init__(self, array, how_far_past):
+        self.array = array
+        self.index = 0
+        self.max_index = len(array) + how_far_past
+
+    def __next__(self):
+        if self.index >= self.max_index:
+            raise StopIteration
+        item = self.array[self.index]
+        self.index += 1
+        return item
+
+
 class InfiniteAIDict(MutableMapping):
     def __init__(
         self,
         _iterable=None,
         *,
-        gpt_key=None,
         gpt_engine="text-davinci-003",
         uplevel=0,
         ratelimit=5,
     ):
         self._dict = dict(_iterable or ())
-        self.gpt_key = gpt_key
         self.gpt_engine = gpt_engine
         self.rate_limit = ratelimit
         self.max_gpt_context = 10
-        self._last_times = []
-        print("what up?", uplevel)
         self._prompt_context = get_frame_source(uplevel + 1)
         self._type = None
         if self._dict:
@@ -199,9 +203,6 @@ class InfiniteAIDict(MutableMapping):
         return len(self._dict)
 
     def _get_next_item(self, asking_key):
-        self._last_times = [t for t in self._last_times if t > time.time() - 1]
-        if len(self._last_times) >= self.rate_limit:
-            raise IndexError("Rate limit exceeded")
         items = []
         last_num = 0
         for i, key in enumerate(list(self._dict.keys())[-self.max_gpt_context :]):
@@ -213,8 +214,7 @@ class InfiniteAIDict(MutableMapping):
 {items}
 {last_num + 1}. {asking_key}:
 """.strip()
-        print("prompt:", prompt)
-        response = openai.Completion.create(
+        response = gpt_client.create_completion(
             engine=self.gpt_engine,
             prompt=prompt,
             temperature=0.5,
@@ -224,9 +224,7 @@ class InfiniteAIDict(MutableMapping):
             # frequency_penalty=0,
             # presence_penalty=0,
         )
-        self._last_times.append(time.time())
         text = response.choices[0].text
-        print("response:", response, text)
         # FIXME: should consider what to do if the last item was cut off
         if self._type is None:
             self._guess_type({asking_key: text})

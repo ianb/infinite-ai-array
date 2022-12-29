@@ -2,8 +2,8 @@
 Credits
 =======
 
-Development Lead
-----------------
+Author
+------
 
 * Ian Bicking <ian@ianbicking.org>
 
