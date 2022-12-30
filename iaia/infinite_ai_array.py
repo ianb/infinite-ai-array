@@ -48,8 +48,8 @@ class InfiniteAIArray(MutableSequence):
     def __getitem__(self, index):
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self) + self._max_easy_grow)
-            if stop > len(self._list):
-                self._get_next_item(stop)
+            if stop >= len(self._list):
+                self._get_next_item(stop - 1)
             return [self[i] for i in range(start, stop, step)]
         if index < len(self._list):
             return self._list[index]
@@ -67,7 +67,17 @@ class InfiniteAIArray(MutableSequence):
         source = repr(self._list)
         return source[:-1] + ", ...]"
 
+    _no_value = ()
+
+    def append(self, /, value=_no_value):
+        if value is self._no_value:
+            self._get_next_item(len(self._list))
+        self._list.append(value)
+
     def __iter__(self):
+        return iter(self._list)
+
+    def forever(self):
         return ArrayIterator(self, self._max_easy_grow)
 
     def insert(self, index, value):
@@ -90,7 +100,7 @@ class InfiniteAIArray(MutableSequence):
             if tries <= 0:
                 raise IndexError("No more items available")
             nums = []
-            last_num = 0
+            last_num = -1
             for i, item in enumerate(self._list[(-self.max_gpt_context) :]):
                 nums.append(f"{i + 1}. {item}")
                 last_num = i
@@ -104,17 +114,20 @@ class InfiniteAIArray(MutableSequence):
                 engine=self.gpt_engine,
                 prompt=prompt,
                 temperature=0.5,
-                max_tokens=24,
+                max_tokens=12 * (needed + 1),
                 # top_p=1,
                 # frequency_penalty=0,
                 # presence_penalty=0,
             )
             text = response.choices[0].text
             result = []
+            has_empty_last_line = False
             for items in [self._fix_line(line) for line in text.splitlines()]:
                 result.extend(items)
+                has_empty_last_line = not items
+            finish_reason = response.choices[0].finish_reason
             # The last item was cut off:
-            if response.choices[0].finish_reason == "length" and result:
+            if finish_reason == "length" and result and not has_empty_last_line:
                 result.pop()
             if self._type is None:
                 self._guess_type(result)
@@ -159,8 +172,9 @@ class InfiniteAIDict(MutableMapping):
         self._dict = dict(_iterable or ())
         self.gpt_engine = gpt_engine
         self.rate_limit = ratelimit
-        self.max_gpt_context = 10
-        self._prompt_context = get_frame_source(uplevel + 1)
+        # Really we don't need as much context as in a list because these are unordered and a few examples should do:
+        self.max_gpt_context = 5
+        self._prompt_context = get_frame_source(uplevel + 1, [self.__class__.__name__])
         self._type = None
         if self._dict:
             self._guess_type(self._dict)
@@ -204,7 +218,7 @@ class InfiniteAIDict(MutableMapping):
 
     def _get_next_item(self, asking_key):
         items = []
-        last_num = 0
+        last_num = -1
         for i, key in enumerate(list(self._dict.keys())[-self.max_gpt_context :]):
             items.append(f"{i + 1}. {key}: {self._dict[key]}")
             last_num = i
@@ -212,7 +226,7 @@ class InfiniteAIDict(MutableMapping):
         prompt = f"""A list of name: value pairs, created with the code `{self._prompt_context}`:
 
 {items}
-{last_num + 1}. {asking_key}:
+{last_num + 2}. {asking_key}:
 """.strip()
         response = gpt_client.create_completion(
             engine=self.gpt_engine,

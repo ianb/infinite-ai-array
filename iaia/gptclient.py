@@ -23,7 +23,7 @@ class GptClient:
     def __init__(self):
         self.cache_dir = Path.cwd() / "iaia-cache"
         self.cache_dir.mkdir(exist_ok=True)
-        self.rate_limit = 5  # requests per second
+        self.rate_limit = 15  # requests per minute
         self._last_times = []
         self.default_engine = "text-davinci-003"
         self.default_temperature = 0.1
@@ -36,12 +36,6 @@ class GptClient:
         self, prompt, stop=None, engine=None, temperature=None, max_tokens=12
     ):
         self._count += 1
-        self._last_times = [t for t in self._last_times if t > time.time() - 1]
-        if len(self._last_times) >= self.rate_limit:
-            raise GptRateLimitError(
-                f"Rate limit of {self.rate_limit} requests per second exceeded"
-            )
-        self._last_times.append(time.time())
         if engine is None:
             engine = self.default_engine
         if temperature is None:
@@ -60,6 +54,13 @@ class GptClient:
                 self.print_response(val["response"], response_time=0)
             self._cached_tokens += val["response"]["usage"]["total_tokens"]
             return val["response"]
+        self._last_times = [t for t in self._last_times if t > time.time() - 60]
+        if len(self._last_times) >= self.rate_limit:
+            raise GptRateLimitError(
+                f"Rate limit of {self.rate_limit} requests per second exceeded"
+            )
+        self._last_times.append(time.time())
+
         start = time.time()
         if self.verbose:
             self.print_request(request, cached=False)
