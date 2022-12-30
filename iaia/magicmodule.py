@@ -140,7 +140,7 @@ Create a function named `{self.name}`:
         tb = traceback.extract_tb(exc.__traceback__)
         line = "?"
         for frame in tb:
-            if frame.filename == "<string>":
+            if frame.filename == "magic.py":
                 line = source.splitlines()[frame.lineno - 1]
                 break
         prompt = f"""\
