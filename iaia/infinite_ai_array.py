@@ -78,7 +78,7 @@ class InfiniteAIArray(MutableSequence):
         return iter(self._list)
 
     def forever(self):
-        return ArrayIterator(self, self._max_easy_grow)
+        return ArrayIterator(self, -1)
 
     def insert(self, index, value):
         self._list.insert(index, value)
@@ -155,7 +155,13 @@ class ArrayIterator:
     def __init__(self, array, how_far_past):
         self.array = array
         self.index = 0
-        self.max_index = len(array) + how_far_past
+        if how_far_past == -1:
+            self.max_index = float("inf")
+        else:
+            self.max_index = len(array) + how_far_past
+
+    def __iter__(self):
+        return self
 
     def __next__(self):
         if self.index >= self.max_index:
