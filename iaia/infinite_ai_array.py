@@ -135,9 +135,14 @@ class InfiniteAIArray(MutableSequence):
             tries -= 1
 
     line_re = re.compile(r"^\d+\.\s*")
+    assignment_re = re.compile(r"^\s*\w+\s*=\s*")
 
     def _fix_line(self, line):
         text = self.line_re.sub("", line.strip()).strip()
+        # Sometimes the GPT-3 response has a line like "1. x = 1" or "1. x = [1, 2, 3]".
+        match = self.assignment_re.match(text)
+        if match:
+            text = text[match.end() :]
         if text.startswith("["):
             text = text.strip("[").strip("]")
             return [item.strip() for item in text.split(",")]
