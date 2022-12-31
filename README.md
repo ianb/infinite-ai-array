@@ -154,3 +154,7 @@ Tokens used: 34+24  total: 58 + cached: 0 = 58 ($0.0012 w/o cache $0.0012)
 `InfiniteAIArray` and `InfiniteAIDict` both look at the call context to understand the purpose of the list, as well as using the contents of the data structure.
 
 `iaia.magic` does _not_ use the call context, but it does use the function name, argument types, and keyword names.
+
+## Contributing
+
+Hopefully you can see this is not meant to be serious. Contributions to make it serious aren't really the idea. Contributions to make it sillier or more audacious _are_ the idea. Silly examples are also welcome.
