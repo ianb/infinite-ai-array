@@ -115,7 +115,7 @@ Create a function named `{self.name}`:
         if missing:
             to_install = [package_names_for_module.get(m, m) for m in missing]
             print("Missing imports:", ", ".join(missing))
-            print("  To install (gessing):")
+            print("  To install (guessing):")
             print("     pip install", " ".join(to_install))
             print("Do it now? [y/N]")
             if input().lower() == "y":
