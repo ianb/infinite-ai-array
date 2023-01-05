@@ -94,7 +94,9 @@ Create a function named `{self.name}`:
             temperature=0.1,
             stop=["```"],
         )
-        return signature + "\n" + response.choices[0].text
+        # Sometimes it stops with two ` instead of three...?
+        response_source = response.choices[0].text.rstrip("`")
+        return signature + "\n" + response_source
 
     def make_function(self, *args, **kw):
         key = self.call_key(*args, **kw)
