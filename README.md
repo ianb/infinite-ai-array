@@ -94,6 +94,30 @@ Exciting stuff...
 
 At least that's what it'll (probably) do if you have the `requests` library installed. (If you don't it will ask if you want to install it.)
 
+### Automagic unit tests
+
+Let's lean into the randomness a bit. Since test-driven development is a myth, what if we focus on coding our functions and just "crowdsource" our unit tests to the AI?
+
+```python
+def get_fibonnaci_number(index):
+    if index == 0:
+        return 0
+    if index == 1:
+        return 1
+    return get_fibonnaci_number(index - 1) + get_fibonnaci_number(index - 2)
+
+>>> assert magic.return_true_if_tests_pass(get_fibonnaci_number)
+>>> print("All tests passed!")
+```
+
+We can even have it run multiple test options at once. To do this, set the environment variable:
+
+```sh
+$ export IAIA_MAGIC_ITERATIONS=3
+```
+
+Note that this will incur a larger API bill.
+
 ## "Nothing in life is free" is false, but for this it is true
 
 All those calls were actually backed by [GPT-3](https://en.wikipedia.org/wiki/GPT-3). GPT-3 costs money. To use it you must [sign up for the API](https://openai.com/api/) and [create an API key](https://beta.openai.com/account/api-keys). Then you can use it like this:

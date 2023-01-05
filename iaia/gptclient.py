@@ -16,9 +16,7 @@ class GptRateLimitError(GptClientError):
     pass
 
 
-GptRequest = namedtuple(
-    "GptRequest", "prompt engine max_tokens temperature top_p n stop"
-)
+GptRequest = namedtuple("GptRequest", "prompt engine max_tokens temperature n stop")
 
 
 class GptClient:
@@ -28,7 +26,7 @@ class GptClient:
         self.rate_limit = 15  # requests per minute
         self._last_times = []
         self.default_engine = "text-davinci-003"
-        self.default_temperature = 0
+        self.default_temperature = 0.1
         self.verbose = bool(os.environ.get("IAIA_VERBOSE"))
         self._count = 0
         self._tokens = 0
@@ -40,7 +38,6 @@ class GptClient:
         stop=None,
         engine=None,
         temperature=None,
-        top_p=None,
         n=1,
         max_tokens=12,
     ):
@@ -54,7 +51,6 @@ class GptClient:
             engine=engine,
             max_tokens=max_tokens,
             temperature=temperature,
-            top_p=top_p,
             n=n,
             stop=stop,
         )
@@ -81,10 +77,7 @@ class GptClient:
             max_tokens=max_tokens,
             temperature=temperature,
             stop=stop,
-            top_p=top_p,
             n=n,
-            # best_of=best_of,
-            logprobs=5,
         )
         self._tokens += response["usage"]["total_tokens"]
         response_time = time.time() - start

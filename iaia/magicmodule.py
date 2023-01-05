@@ -32,7 +32,7 @@ class MagicFunction:
         self.module = module
         self.name = name
         self.verbose = bool(os.environ.get("IAIA_VERBOSE"))
-        self.n = 1
+        self.n = int(os.environ.get("IAIA_MAGIC_ITERATIONS") or 1)
         self.sources = {}
         self.funcs = {}
         self.imports = {}
@@ -67,7 +67,7 @@ class MagicFunction:
             except Exception as e:
                 exc = e
             print(f"Attempting to fix exception {exc} in func {func_i}...")
-            self.fix_function(func_i, exc, *args, **kw)
+            func = self.fix_function(func_i, exc, *args, **kw)
             return func(*args, **kw)
 
     def call_key(self, *args, **kw):
@@ -196,3 +196,4 @@ The same function but with the {exc.__class__.__name__} exception fixed:
         func = self.compile_function(key, source)
         self.sources[key][func_i] = source
         self.funcs[key][func_i] = func
+        return func
