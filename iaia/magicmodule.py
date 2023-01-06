@@ -161,7 +161,7 @@ Create a function named `{self.name}`:
             engine=self.module.gpt_engine,
             prompt=prompt,
             max_tokens=2000,
-            temperature=0,
+            temperature=0 if self.n == 1 else 0.1,
             stop=["``"],
             n=self.n,
         )
