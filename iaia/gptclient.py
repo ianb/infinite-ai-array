@@ -16,7 +16,7 @@ class GptRateLimitError(GptClientError):
     pass
 
 
-GptRequest = namedtuple("GptRequest", "prompt engine max_tokens temperature stop")
+GptRequest = namedtuple("GptRequest", "prompt engine max_tokens temperature n stop")
 
 
 class GptClient:
@@ -33,7 +33,13 @@ class GptClient:
         self._cached_tokens = 0
 
     def create_completion(
-        self, prompt, stop=None, engine=None, temperature=None, max_tokens=12
+        self,
+        prompt,
+        stop=None,
+        engine=None,
+        temperature=None,
+        n=1,
+        max_tokens=12,
     ):
         self._count += 1
         if engine is None:
@@ -45,6 +51,7 @@ class GptClient:
             engine=engine,
             max_tokens=max_tokens,
             temperature=temperature,
+            n=n,
             stop=stop,
         )
         val = self.get_cache(request)
@@ -70,6 +77,7 @@ class GptClient:
             max_tokens=max_tokens,
             temperature=temperature,
             stop=stop,
+            n=n,
         )
         self._tokens += response["usage"]["total_tokens"]
         response_time = time.time() - start
