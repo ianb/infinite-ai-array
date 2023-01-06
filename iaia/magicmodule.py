@@ -1,5 +1,7 @@
 import sys
 from .findimports import find_imports
+import inspect
+import typing
 import subprocess
 from .gptclient import gpt_client
 import re
@@ -18,8 +20,8 @@ class MagicModule:
         # FIXME: all code appears to be in <string> and can't
         # be shown in tracebacks. Setting __file__ here doesn't
         # help, but sure what the answer is
-        self.ns = {}
-        self.existing = {}
+        self.ns = {"typing": typing}
+        self.existing = {"test": self.test}
 
     def __getattr__(self, name):
         if name not in self.existing:
@@ -57,49 +59,96 @@ class MagicFunction:
         return f"<iaia.maigic.{self.name}{sigs}>"
 
     def __call__(self, *args, **kw):
+        """
+        Returns one result or a list of results, depending on the number of
+        iterations requested
+        """
         key = self.call_key(*args, **kw)
         if key not in self.funcs:
             self.make_functions(*args, **kw)
         exc = None
-        for func_i, func in self.funcs[key].items():
+        results = []
+        for func_i, func in enumerate(self.funcs[key]):
             try:
-                return func(*args, **kw)
+                result = func(*args, **kw)
             except Exception as e:
                 exc = e
-            print(f"Attempting to fix exception {exc} in func {func_i}...")
-            func = self.fix_function(func_i, exc, *args, **kw)
-            return func(*args, **kw)
+                print(f"Attempting to fix exception {exc} in func {func_i}...")
+                func = self.fix_function(func_i, exc, *args, **kw)
+                result = func(*args, **kw)
+            results.append(result)
+        return results[0] if len(results) == 1 else results
 
     def call_key(self, *args, **kw):
         return tuple([len(args), *sorted(kw.keys())])
 
-    def format_type_for_prompt(self, arg):
+    def format_arg_for_prompt(self, arg, *, index=None, label=None):
         """
-        Format arguments for the prompt, adding info about function args
+        Format argument for the prompt
         """
-        name = type(arg).__name__
-        if name == "function":
-            arg_count = arg.__code__.co_argcount
-            return "Callable[" + ", ".join(["Any"] * arg_count) + "]"
-        return name
+        if label is None:
+            if index is None:
+                raise ValueError("Must provide either index or label")
+            label = self.default_arg_label(arg, index)
+        arg_type = type(arg).__name__
 
-    def format_signature_for_compile(self, signature: str):
+        if arg_type == "function":
+            return_annotation = inspect.signature(arg).return_annotation
+            if return_annotation == inspect._empty:
+                return_type = "typing.Any"
+            elif type(return_annotation) == typing._CallableGenericAlias:
+                return_type = str(return_annotation)
+            else:
+                return_type = type(return_annotation).__name__
+            arg_type = f"typing.Callable[..., {return_type}]"
+
+        return f"{label}: {arg_type}"
+
+    def default_arg_label(self, arg, index: int):
+        return arg.__name__ if hasattr(arg, "__name__") else f"arg{index + 1}"
+
+    def format_docstring_for_prompt(self, args, kwargs):
         """
-        Format function signature so it's compilable by Python
+        Format docstring for the prompt.
+        Right now, just adds signatures for Callable args
         """
-        return re.sub(": Callable\[.*\]", "", signature)
+        lines = []
+
+        def comment_for_callable(arg: typing.Callable) -> str:
+            sig = inspect.signature(arg)
+            if sig.return_annotation == inspect._empty:
+                return f"a function with arguments {str(sig)}"
+            return f"a function of the form {sig}"
+
+        for i, arg in enumerate(args):
+            if type(arg).__name__ == "function":
+                lines.append(
+                    f"{self.default_arg_label(arg, i)}: {comment_for_callable(arg)}"
+                )
+        for label, arg in kwargs.items():
+            if type(arg).__name__ == "function":
+                lines.append(f"{label}: {comment_for_callable(arg)}")
+        return "\n    ".join(lines)
+
+    # def format_signature_for_compile(self, signature: str):
+    #     """
+    #     Format function signature so it's compilable by Python
+    #     """
+    #     return re.sub(": Callable\[.*\]", "", signature)
 
     def make_prompt(self, *args, **kw):
         sig = []
         for i, arg in enumerate(args):
-            arg_name = arg.__name__ if hasattr(arg, "__name__") else f"arg{i + 1}"
-            sig.append(f"{arg_name}: {self.format_type_for_prompt(arg)}")
+            sig.append(f"{self.format_arg_for_prompt(arg, index=i)}")
         if kw:
             sig.append("*")
-        for name, arg in kw.items():
-            sig.append(f"{name}: {self.format_type_for_prompt(arg)}")
+        for arg_name, arg in kw.items():
+            sig.append(f"{self.format_arg_for_prompt(arg, label=arg_name)}")
         signature = f"{self.name}({', '.join(sig)})"
-        source = f"def {signature}:"
+        docstring = self.format_docstring_for_prompt(args, kw)
+        source = f"""def {signature}:
+    \"\"\"
+    {docstring}"""
         prompt = f"""\
 Create a function named `{self.name}`:
 
@@ -107,7 +156,7 @@ Create a function named `{self.name}`:
 {source}"""
         return prompt, source
 
-    def get_completions(self, prompt, signature):
+    def get_completions(self, prompt, source):
         response = gpt_client.create_completion(
             engine=self.module.gpt_engine,
             prompt=prompt,
@@ -116,23 +165,20 @@ Create a function named `{self.name}`:
             stop=["``"],
             n=self.n,
         )
-        return [
-            self.format_signature_for_compile(signature) + "\n" + choice.text
-            for choice in response.choices
-        ]
+        return [source + choice.text for choice in response.choices]
 
     def make_functions(self, *args, **kw):
         key = self.call_key(*args, **kw)
-        prompt, signature = self.make_prompt(*args, **kw)
-        sources = self.get_completions(prompt, signature)
-        for source_i, source in enumerate(sources):
+        prompt, source_prefix = self.make_prompt(*args, **kw)
+        sources = self.get_completions(prompt, source_prefix)
+        self.sources[key] = list()
+        self.funcs[key] = list()
+        for i, source in enumerate(sources):
             if self.verbose:
-                print(f"Compiling function index {source_i}... {source}")
+                print(f"Compiling function #{i+1}... {source}")
             func = self.compile_function(key, source)
-            self.sources[key] = self.sources.get(key, dict())
-            self.funcs[key] = self.funcs.get(key, dict())
-            self.sources[key][source_i] = source
-            self.funcs[key][source_i] = func
+            self.sources[key].append(source)
+            self.funcs[key].append(func)
 
     def compile_function(self, key, source):
         self.imports[key] = find_imports(source)
