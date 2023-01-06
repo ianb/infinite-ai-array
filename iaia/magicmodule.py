@@ -21,7 +21,7 @@ class MagicModule:
         # be shown in tracebacks. Setting __file__ here doesn't
         # help, but sure what the answer is
         self.ns = {"typing": typing}
-        self.existing = {"test": self.test}
+        self.existing = {}
 
     def __getattr__(self, name):
         if name not in self.existing:
@@ -107,7 +107,7 @@ class MagicFunction:
     def default_arg_label(self, arg, index: int):
         return arg.__name__ if hasattr(arg, "__name__") else f"arg{index + 1}"
 
-    def format_docstring_for_prompt(self, args, kwargs):
+    def format_docstring_for_prompt(self, *, args, kwargs):
         """
         Format docstring for the prompt.
         Right now, just adds signatures for Callable args
@@ -120,14 +120,16 @@ class MagicFunction:
                 return f"a function with arguments {str(sig)}"
             return f"a function of the form {sig}"
 
-        for i, arg in enumerate(args):
-            if type(arg).__name__ == "function":
-                lines.append(
-                    f"{self.default_arg_label(arg, i)}: {comment_for_callable(arg)}"
-                )
-        for label, arg in kwargs.items():
-            if type(arg).__name__ == "function":
-                lines.append(f"{label}: {comment_for_callable(arg)}")
+        if args:
+            for i, arg in enumerate(args):
+                if type(arg).__name__ == "function":
+                    lines.append(
+                        f"{self.default_arg_label(arg, i)}: {comment_for_callable(arg)}"
+                    )
+        if kwargs:
+            for label, arg in kwargs.items():
+                if type(arg).__name__ == "function":
+                    lines.append(f"{label}: {comment_for_callable(arg)}")
         return "\n    ".join(lines)
 
     def make_prompt(self, *args, **kw):
@@ -139,7 +141,7 @@ class MagicFunction:
         for arg_name, arg in kw.items():
             sig.append(f"{self.format_arg_for_prompt(arg, label=arg_name)}")
         signature = f"{self.name}({', '.join(sig)})"
-        docstring = self.format_docstring_for_prompt(args, kw)
+        docstring = self.format_docstring_for_prompt(args=args, kwargs=kw)
         source = f"""def {signature}:
     \"\"\"
     {docstring}"""
