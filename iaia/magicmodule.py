@@ -130,12 +130,6 @@ class MagicFunction:
                 lines.append(f"{label}: {comment_for_callable(arg)}")
         return "\n    ".join(lines)
 
-    # def format_signature_for_compile(self, signature: str):
-    #     """
-    #     Format function signature so it's compilable by Python
-    #     """
-    #     return re.sub(": Callable\[.*\]", "", signature)
-
     def make_prompt(self, *args, **kw):
         sig = []
         for i, arg in enumerate(args):
